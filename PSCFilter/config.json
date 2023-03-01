@@ -1,0 +1,26 @@
+{
+    "config": {
+      "type":"blacklist"
+    },
+    
+    "path" : [
+      "/home/",
+      "/lib/x86_64-linux-gnu/",
+      "/etc/"
+    ],
+    
+    "systemcall": [
+      {
+        "systemcall_name": "read",
+        "option": "alert"
+      },
+      {
+        "systemcall_name": "execve",
+        "option": "alert"
+      },
+      {
+        "systemcall_name": "write",
+        "option": "alert"
+      }
+    ]
+  }
