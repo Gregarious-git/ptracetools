@@ -13,21 +13,20 @@ static bfd *libc_abfd;
 static asymbol **symbols;
 static int nsymbols;
 
-long long libc_addr = 0x0;
 
 struct user_regs_struct regs;
 
 struct chunk_list
 {
-  long long chunk_addr;
+  long chunk_addr;
   struct chunk_list *next;
 };
 
-struct chunk_list  *chunk_list_create(struct chunk_list* chunk_list,long long *mmap_pointer,long long chunk_addr)
+struct chunk_list  *chunk_list_create(struct chunk_list* chunk_list,long *mmap_pointer,long chunk_addr)
 {
   struct chunk_list* new_list = (struct chunk_list*)malloc(sizeof(struct chunk_list));
   
-  long long hash_addr = chunk_addr % 0x10000;
+  long hash_addr = chunk_addr % 0x10000;
   
   struct chunk_list* p = chunk_list;
   
@@ -53,7 +52,7 @@ struct chunk_list  *chunk_list_create(struct chunk_list* chunk_list,long long *m
   }
 }  
     
-struct chunk_list  *chunk_list_delete(struct chunk_list* chunk_list,long long chunk_addr)
+struct chunk_list  *chunk_list_delete(struct chunk_list* chunk_list,long chunk_addr)
 {
   struct chunk_list *next_pointer; 
   struct chunk_list *pointer = chunk_list;
@@ -71,7 +70,7 @@ struct chunk_list  *chunk_list_delete(struct chunk_list* chunk_list,long long ch
   return 2;
 }
 
-struct chunk_list  *chunk_list_print(struct chunk_list* chunk_list,long long chunk_addr)
+struct chunk_list  *chunk_list_print(struct chunk_list* chunk_list,long chunk_addr)
 {
   struct chunk_list *next_pointer; 
   struct chunk_list *pointer = chunk_list;
@@ -88,35 +87,20 @@ struct chunk_list  *chunk_list_print(struct chunk_list* chunk_list,long long chu
   }
 }
 
-void malloc_delete(int pid,long malloc_data,long long malloc_addr)
+
+void breakpoint_delete(int pid,long data,long addr)
 {
   
-  ptrace(PTRACE_POKETEXT, pid, malloc_addr, malloc_data);
+  ptrace(PTRACE_POKETEXT, pid, addr, data);
 }
 
-void free_delete(int pid,long free_data,long long free_addr)
-{
-  
-  ptrace(PTRACE_POKETEXT, pid, free_addr, free_data);
-}
-
-long malloc_break(int pid,long long malloc_addr)
-{
- 
-  long long malloc_data,after_malloc_data;
-  malloc_data = ptrace(PTRACE_PEEKDATA,pid,malloc_addr,NULL);
-  ptrace(PTRACE_POKETEXT, pid, malloc_addr, ((malloc_data & 0xFFFFFFFFFFFFFF00) | 0xCC));
-  
-  return malloc_data;
-}
-
-long free_break(int pid,long long free_addr)
+long breakpoint_set(int pid,long addr)
 { 
-  long long free_data,after_free_data;
-  free_data = ptrace(PTRACE_PEEKDATA,pid,free_addr,NULL);
-  ptrace(PTRACE_POKETEXT, pid, free_addr, ((free_data & 0xFFFFFFFFFFFFFF00) | 0xCC));
+  long data;
+  data = ptrace(PTRACE_PEEKDATA,pid,addr,NULL);
+  ptrace(PTRACE_POKETEXT, pid,addr, ((data & 0xFFFFFFFFFFFFFF00) | 0xCC));
 
-  return free_data;
+  return data;
 }
 
 
@@ -132,8 +116,8 @@ long get_malloc_addr()
 {
   size_t nsyms;
   asection *text;
-  long long malloc_offset;
-  long long malloc_addr;
+  long malloc_offset;
+  long malloc_addr;
   int ret;
     
   void *char_malloc = "malloc";
@@ -154,7 +138,6 @@ long get_malloc_addr()
   for (int i = 0; i < nsyms; i++) {
     if (!strcmp(symbols[i]->name, char_malloc)) {
       malloc_offset = symbols[i]->value + text->vma;
-      malloc_addr = libc_addr + malloc_offset;
       break;
     }
   }
@@ -168,8 +151,8 @@ long get_free_addr()
 {
   size_t nsyms;
   asection *text;
-  long long free_offset;
-  long long free_addr;
+  long free_offset;
+  long free_addr;
   int ret;
     
   void *char_free = "free";
@@ -190,7 +173,6 @@ long get_free_addr()
   for (int i = 0; i < nsyms; i++) {
     if (!strcmp(symbols[i]->name, char_free)) {
       free_offset = symbols[i]->value + text->vma;
-      free_addr = libc_addr + free_offset;
       break;
     }
   }
@@ -201,63 +183,40 @@ long get_free_addr()
 }
 
 
-long get_malloc_ret(int pid,long long malloc_func)
+long get_func_ret(int pid,long func_addr)
 {
-  long long malloc_addr;
   char temp[18];
-  malloc_addr = malloc_func + libc_addr;
-  long long rip_opecode = ptrace(PTRACE_PEEKDATA,pid,malloc_addr,NULL);
-  long long i = 0;
+  long rip_opecode = ptrace(PTRACE_PEEKDATA,pid,func_addr,NULL);
+  long i = 0;
   const char* opecode_ret = "c3c9";
   char *find;
   
   
   snprintf(temp, 17, "%lx", rip_opecode);
   while(strncmp(temp,opecode_ret,4) != 0){
-    rip_opecode = ptrace(PTRACE_PEEKDATA,pid,malloc_addr + i,NULL);
+    rip_opecode = ptrace(PTRACE_PEEKDATA,pid,func_addr + i,NULL);
     snprintf(temp, 17, "%lx", rip_opecode);
     i+=1;
     
   }
   
-  long long result = malloc_addr + i+6;
+  long result = func_addr + i+6;
   
   return result;
 } 
 
-long get_free_ret(int pid,long long free_func)
-{
-  long long free_addr;
-  char temp[18];
-  free_addr = free_func + libc_addr;
-  long long rip_opecode = ptrace(PTRACE_PEEKDATA,pid,free_addr,NULL);
-  long long i = 0;
-  const char* opecode_ret = "c3c9";
-  char *find;
-  
-  snprintf(temp, 17, "%lx", rip_opecode);
-  while(strncmp(temp,opecode_ret,4) != 0){
-    rip_opecode = ptrace(PTRACE_PEEKDATA,pid,free_addr + i,NULL);
-    snprintf(temp, 17, "%lx", rip_opecode);
-    i+=1;
-  }
-  
-  long long result = free_addr + i+6;
-  
-  return result;
-} 
 
 struct chunk_list *list = NULL;
 
 int main(int argc, char *argv[],char **envp)
 {
-  long long *mmap_pointer = mmap(0, 0x10000000, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+  long *mmap_pointer = mmap(0, 0x10000000, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
   int status , count,pid;
 
   pid = fork();
   if (!pid) { 
     ptrace(PTRACE_TRACEME, 0, NULL, NULL);
-    execve(argv[2], argv + 1, envp); 
+    execve(argv[1], argv + 1, envp); 
   }
   waitpid(pid, &status, 0);
 
@@ -269,16 +228,16 @@ int main(int argc, char *argv[],char **envp)
       return 1;
   }
 
-  long long malloc_func = get_malloc_addr();
-  long long free_func = get_free_addr();
+  long malloc_func = get_malloc_addr();
+  long free_func = get_free_addr();
 
-  long long malloc_addr = get_malloc_ret(pid,malloc_func);
-  long long free_addr = get_free_ret(pid,free_func);
+  long malloc_addr = get_func_ret(pid,malloc_func);
+  long free_addr = get_func_ret(pid,free_func);
 
   bfd_close(libc_abfd);
 
-  long long malloc_data = malloc_break(pid,malloc_addr);
-  long long free_data = free_break(pid,free_func);
+  long malloc_data = breakpoint_set(pid,malloc_addr);
+  long free_data = breakpoint_set(pid,free_func);
   
   ptrace_continue(pid,status);
 
@@ -290,13 +249,13 @@ int main(int argc, char *argv[],char **envp)
 
       ptrace(PTRACE_GETREGS, pid, NULL, &regs);
 
-      malloc_delete(pid,malloc_data,malloc_addr);
-      free_delete(pid,free_data,free_func);
+      breakpoint_delete(pid,malloc_data,malloc_addr);
+      breakpoint_delete(pid,free_data,free_func);
 
       if (regs.rip == malloc_addr+1){
-        long long  chunk_addr = regs.rax;
+        long chunk_addr = regs.rax;
         
-        long long hash_addr = chunk_addr % 0x10000;
+        long hash_addr = chunk_addr % 0x10000;
         
         if(mmap_pointer[hash_addr] == 0){
           struct chunk_list *list = NULL;
@@ -315,9 +274,9 @@ int main(int argc, char *argv[],char **envp)
         regs.rip = free_func;
         ptrace(PTRACE_SETREGS, pid, 0, &regs);
         
-        long long hash_addr = regs.rax % 0x10000;
+        long hash_addr = regs.rax % 0x10000;
         
-        long long chunk_addr = regs.rax;
+        long chunk_addr = regs.rax;
                 
         list = mmap_pointer[hash_addr];
 
@@ -343,8 +302,8 @@ int main(int argc, char *argv[],char **envp)
       
       ptrace(PTRACE_GETREGS, pid, NULL, &regs);
             
-      long long malloc_data = malloc_break(pid,malloc_addr);
-      long long free_data = free_break(pid,free_func);
+      long malloc_data = breakpoint_set(pid,malloc_addr);
+      long free_data = breakpoint_set(pid,free_func);
       
       ptrace_continue(pid,status);
 
