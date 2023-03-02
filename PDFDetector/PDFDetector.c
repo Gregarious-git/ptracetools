@@ -107,7 +107,6 @@ long malloc_break(int pid,long long malloc_addr)
   malloc_data = ptrace(PTRACE_PEEKDATA,pid,malloc_addr,NULL);
   ptrace(PTRACE_POKETEXT, pid, malloc_addr, ((malloc_data & 0xFFFFFFFFFFFFFF00) | 0xCC));
   
-  after_malloc_data = ptrace(PTRACE_PEEKDATA,pid,malloc_addr,NULL);
   return malloc_data;
 }
 
@@ -117,7 +116,6 @@ long free_break(int pid,long long free_addr)
   free_data = ptrace(PTRACE_PEEKDATA,pid,free_addr,NULL);
   ptrace(PTRACE_POKETEXT, pid, free_addr, ((free_data & 0xFFFFFFFFFFFFFF00) | 0xCC));
 
-  after_free_data = ptrace(PTRACE_PEEKDATA,pid,free_addr,NULL);
   return free_data;
 }
 
@@ -125,7 +123,9 @@ long free_break(int pid,long long free_addr)
 void ptrace_continue(int pid,int status)
 {
   ptrace(PTRACE_CONT, pid, NULL, NULL);
-  waitpid(pid, &status, 0);
+  if (waitpid(pid, &status, 0) == -1){
+    exit(0);
+  }
 }
 
 long get_malloc_addr()
