@@ -355,7 +355,7 @@ typedef struct sys_list
 
 typedef struct path_list
 {
-  char path_name[1026];
+  char path_name[1024];
   struct sys_filter *next;
 };
 
