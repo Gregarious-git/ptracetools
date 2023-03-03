@@ -63,6 +63,7 @@ struct chunk_list  *chunk_list_delete(struct chunk_list* chunk_list,long chunk_a
       
     if (next_pointer->chunk_addr == chunk_addr){
       pointer->next = next_pointer->next; 
+      free(next_pointer);
       return 1;
     }
     pointer = next_pointer;
