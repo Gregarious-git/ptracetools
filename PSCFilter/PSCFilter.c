@@ -678,11 +678,11 @@ int main(int argc, char *argv[], char *envp[])
   int pid, status, syscall_count, call_count;
   char char_path[1024];
 
-  long long regs_path,int_orig_rax,data,next_data,call_execve = 0;
+  long regs_path,int_orig_rax,data,next_data,call_execve = 0;
   
-  long long prev_orig_rax = -1;
-  long long prev_rdi = -1;
-  long long prev_rsi = -1;
+  long prev_orig_rax = -1;
+  long prev_rdi = -1;
+  long prev_rsi = -1;
   
   readfile(syscall_number);
 
@@ -704,7 +704,7 @@ int main(int argc, char *argv[], char *envp[])
       ptrace(PTRACE_GETREGS, pid, NULL, &regs);
       if (prev_orig_rax != regs.orig_rax && prev_rdi != regs.rdi && prev_rsi != regs.rsi && call_execve != 0) {
         int_orig_rax = regs.orig_rax;
-        printf("%s %lld 0x%lx 0x%lx\n", systemcall[regs.orig_rax],regs.orig_rax, regs.rdi , regs.rsi);
+        printf("%s %ld 0x%lx 0x%lx\n", systemcall[regs.orig_rax],regs.orig_rax, regs.rdi , regs.rsi);
         if (syscall_number[regs.orig_rax] == 1 && config_type == 2){        
           check_list(list,int_orig_rax,pid,fp);
            
