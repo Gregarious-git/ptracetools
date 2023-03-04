@@ -2,6 +2,7 @@
 
 ## PSCFilter
 Json parser : jannson
+
 ```bash
 ./PSCFilter [target] 
 ```
@@ -9,3 +10,7 @@ Json parser : jannson
 
 ## PDFDetector
 ELF parser : libbfd
+
+```bash
+./PDFDetector [target] [library] 
+```
