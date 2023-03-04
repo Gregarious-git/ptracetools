@@ -1,7 +1,7 @@
 # ptracetools
 
 ## PSCFilter（Ptrace SystemCall Filter)
-Json parser : janson
+Json parser : jansson
 
 ```bash
 ./PSCFilter [target] 
