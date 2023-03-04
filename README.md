@@ -1,6 +1,6 @@
 # ptracetools
 
-## PSCFilter
+## PSCFilter（Ptrace SystemCall Filter)
 Json parser : jannson
 
 ```bash
@@ -8,7 +8,7 @@ Json parser : jannson
 ```
 
 
-## PDFDetector
+## PDFDetector(Ptrace DoubleFree Detector)
 ELF parser : libbfd
 
 ```bash
