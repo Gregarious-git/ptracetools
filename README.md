@@ -8,7 +8,7 @@ Json parser : jansson
 ```
 
 
-## PDFDetector(Ptrace DoubleFree Detector)
+## PDFDetector(Ptrace DoubleFree Detector)(準備中)
 ELF parser : libbfd
 
 ```bash
