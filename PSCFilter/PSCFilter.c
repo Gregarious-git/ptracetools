@@ -421,60 +421,34 @@ struct path_list  *check_path_list(struct path_list* path_list,char char_path[],
   }
 }
 
-struct sys_list  *check_list(struct sys_list* list,long long int int_orig_rax,int pid,FILE** fp)
+void check_list(int *syscall_number,long long int int_orig_rax,int pid,FILE** fp)
 {
-  struct sys_list *pointer = list;
-  if (pointer->systemcall_number == int_orig_rax){
-    if (pointer->option_number == 1){
-      printf("%s %s\n",systemcall[int_orig_rax] ,"was called");
-      printf("[*] %s\n" ,"process killed");
-      kill(pid, SIGINT);
-      fclose(fp);
-      exit(0);
-    }else if(pointer->option_number == 2){
-      ptrace(PTRACE_GETREGS, pid, NULL, &regs);
-      fprintf(fp,"%s 0x%lx 0x%lx 0x%lx 0x%lx\n",systemcall[int_orig_rax] ,regs.rip,regs.rax,regs.rdi,regs.rsi);
-    }
-    
-  }else{
-    while (pointer->next !=NULL){
-      pointer = pointer->next;
-      if (pointer->systemcall_number == int_orig_rax){
-        if (pointer->option_number == 1){
-          printf("%s %s\n",systemcall[int_orig_rax] ,"was called");
-          printf("[*] %s\n" ,"process killed");
-          kill(pid, SIGINT);
-          fclose(fp);
-          exit(0);
-        }else if(pointer->option_number == 2){
-          ptrace(PTRACE_GETREGS, pid, NULL, &regs);
-          fprintf(fp,"%s 0x%lx 0x%lx 0x%lx 0x%lx\n",systemcall[int_orig_rax] ,regs.rip,regs.rax,regs.rdi,regs.rsi);
-          break;
-        }
-      }
-    }
+  if (syscall_number[regs.orig_rax] == 1){
+    printf("%s %s\n",systemcall[int_orig_rax] ,"was called");
+    printf("[*] %s\n" ,"process killed");
+    kill(pid, SIGINT);
+    fclose(fp);
+    exit(0);
+  }else if (syscall_number[regs.orig_rax] == 2){
+    ptrace(PTRACE_GETREGS, pid, NULL, &regs);
+    fprintf(fp,"%s 0x%lx 0x%lx 0x%lx 0x%lx\n",systemcall[int_orig_rax] ,regs.rip,regs.rax,regs.rdi,regs.rsi);
   }
+
 }
 
-struct sys_list  *whitelist_check_list(struct sys_list* list,long long int int_orig_rax,int pid)
+
+void whitelist_check_list(int *syscall_number,long long int int_orig_rax,int pid,FILE** fp)
 {
-  struct sys_list *pointer = list;
-  if (pointer->systemcall_number == int_orig_rax){
+  if (syscall_number[regs.orig_rax] >= 1){
     return;
-  }else{
-    while (pointer->next !=NULL){
-      if (pointer->systemcall_number == int_orig_rax){
-        return;
-      }else{
-        pointer = pointer->next;
-      }
-    }
+  }else if (syscall_number[regs.orig_rax] == 0){
     printf("%s %s\n",systemcall[int_orig_rax] ,"is not secure");
     printf("[*] %s\n" ,"process killed");
     kill(pid, SIGINT);
     fclose(fp);
     exit(0);
   }
+
 }
 
 
@@ -525,7 +499,8 @@ void get_path(int pid,char char_path[],long long int regs_path)
     temp = ptrace(PTRACE_PEEKDATA, pid, regs_path, NULL);
     swaptemp = bswap_64(temp);
     snprintf(temp_data, 17, "%lx", swaptemp);
-    strcat(ascii_data, temp_data);          
+    strcat(ascii_data, temp_data);     
+    printf("%s\n",ascii_data);     
   } 
   return char_path;
 }
@@ -544,41 +519,41 @@ void syscall_filter(char *setread,int *syscall_number,char *option){
   if(strstr(savedata, sys_read) != NULL){
     syscall_number[0] = 1;
     if(strstr(option, option_kill) != NULL){
-      list = list_create(list,0,1);
+      syscall_number[0] = 1;
     }else if(strstr(option, option_alert) != NULL){
-      list = list_create(list,0,2);
+      syscall_number[0] = 2;
     }
   }
   if(strstr(savedata, sys_write) != NULL){
     syscall_number[1] = 1;
     if(strstr(option, option_kill) != NULL){
-      list = list_create(list,1,1);
+      syscall_number[1] = 1;
     }else if(strstr(option, option_alert) != NULL){
-      list = list_create(list,1,2);
+      syscall_number[1] = 2;
     }
   }
   if(strstr(savedata, sys_openat) != NULL){
     syscall_number[257] = 1;
     if(strstr(option, option_kill) != NULL){
-      list = list_create(list,257,1);
+      syscall_number[257] = 1;
     }else if(strstr(option, option_alert) != NULL){
-      list = list_create(list,257,2);
+      syscall_number[257] = 2;
     }
   }
   if(strstr(savedata, sys_execve) != NULL){
     syscall_number[59] = 1;
     if(strstr(option, option_kill) != NULL){
-      list = list_create(list,59,1);
+      syscall_number[59] = 1;
     }else if(strstr(option, option_alert) != NULL){
-      list = list_create(list,59,2);
+      syscall_number[59] = 2;
     }
   }
   if(strstr(savedata, sys_close) != NULL){
     syscall_number[3] = 1;
     if(strstr(option, option_kill) != NULL){
-      list = list_create(list,3,1);
+      syscall_number[3] = 1;
     }else if(strstr(option, option_alert) != NULL){
-      list = list_create(list,3,2);
+      syscall_number[3] = 2;
     }
   }
   else{
@@ -672,10 +647,9 @@ int main(int argc, char *argv[], char *envp[])
 {
   file_create();
   
-  int syscall_number[322];
-  
-  
-  int pid, status, syscall_count, call_count;
+  int syscall_number[322] = {0};
+
+  int pid,new_pid, status, syscall_count, call_count;
   char char_path[1024];
 
   long regs_path,int_orig_rax,data,next_data,call_execve = 0;
@@ -683,6 +657,8 @@ int main(int argc, char *argv[], char *envp[])
   long prev_orig_rax = -1;
   long prev_rdi = -1;
   long prev_rsi = -1;
+  siginfo_t si;
+  
   
   readfile(syscall_number);
 
@@ -692,24 +668,38 @@ int main(int argc, char *argv[], char *envp[])
     ptrace(PTRACE_TRACEME, 0, NULL, NULL);
     execve(argv[1], argv + 1, envp); 
   }
-  ptrace(PTRACE_SETOPTIONS, pid, NULL, PTRACE_O_TRACEFORK|PTRACE_O_TRACECLONE|PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK);
 
+  status = waitid(P_ALL, 0, &si, WEXITED | WSTOPPED | WCONTINUED);
+  ptrace(PTRACE_SETOPTIONS, pid, NULL,PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK | PTRACE_O_TRACECLONE | PTRACE_O_TRACEEXEC | PTRACE_O_TRACEVFORKDONE | PTRACE_O_TRACEEXIT);
+  ptrace(PTRACE_SYSCALL, pid, NULL, NULL);
+  
   while (1) { 
-    waitpid(pid, &status, 0);
-
-    if (WIFEXITED(status)){
-      break;
-    }else if (WIFSTOPPED(status)) {
     
+    pid = si.si_pid;
+
+    status = waitid(P_ALL, 0, &si, WEXITED | WSTOPPED | WCONTINUED);
+    
+    if (si.si_code == CLD_EXITED){
+      break;
+    }  
+    if (si.si_code == CLD_TRAPPED && (si.si_status == (SIGTRAP | (PTRACE_EVENT_FORK << 8))) || (si.si_status == (SIGTRAP | (PTRACE_EVENT_CLONE<< 8))) || (si.si_status == (SIGTRAP | (PTRACE_EVENT_VFORK << 8)))){
+      ptrace(PTRACE_GETEVENTMSG, pid, 0,&new_pid);
+      ptrace(PTRACE_SETOPTIONS, new_pid, NULL,  PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK | PTRACE_O_TRACECLONE | PTRACE_O_TRACEEXEC | PTRACE_O_TRACEVFORKDONE | PTRACE_O_TRACEEXIT);
+      
+      ptrace(PTRACE_CONT, new_pid, NULL, NULL);
+      status = waitid(P_ALL, 0, &si, WEXITED | WSTOPPED | WCONTINUED);
+      printf("%d\n",si.si_pid);
+    }else 
+    if (si.si_code == CLD_TRAPPED) {
+      
       ptrace(PTRACE_GETREGS, pid, NULL, &regs);
       if (prev_orig_rax != regs.orig_rax && prev_rdi != regs.rdi && prev_rsi != regs.rsi && call_execve != 0) {
         int_orig_rax = regs.orig_rax;
-        printf("%s %ld 0x%lx 0x%lx\n", systemcall[regs.orig_rax],regs.orig_rax, regs.rdi , regs.rsi);
-        if (syscall_number[regs.orig_rax] == 1 && config_type == 2){        
-          check_list(list,int_orig_rax,pid,fp);
-           
+        printf("%d %s %d %ld 0x%lx 0x%lx\n", si.si_pid,systemcall[regs.orig_rax],syscall_number[regs.orig_rax],regs.orig_rax, regs.rdi , regs.rsi);
+        if (syscall_number[regs.orig_rax] >= 1 && config_type == 2){        
+          check_list(syscall_number,int_orig_rax,pid,fp);
         }else if (config_type == 1){
-          whitelist_check_list(list,int_orig_rax,pid);
+          whitelist_check_list(syscall_number,int_orig_rax,pid,fp);
         }
         if (regs.orig_rax == 257){
           if (call_count == 0){ 
@@ -734,13 +724,11 @@ int main(int argc, char *argv[], char *envp[])
       }else if(regs.orig_rax == 59 && call_execve == 0) {
         call_execve = 1;
       }
-      
       prev_orig_rax = regs.orig_rax;
       prev_rdi = regs.orig_rax;
       prev_rsi = regs.orig_rax;
-   
+      
     }
-    
     ptrace(PTRACE_SYSCALL, pid, NULL, NULL);
   }
   fclose(fp);
