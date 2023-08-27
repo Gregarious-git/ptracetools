@@ -482,7 +482,7 @@ struct chunk_list *list = NULL;
 
 int main(int argc, char *argv[],char **envp)
 {
-  long *mmap_pointer = mmap(0, 0x10000000, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+  long *mmap_pointer = mmap(0, 0x30000000, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
   
   int status , count,pid;
   char proc_maps[32];
