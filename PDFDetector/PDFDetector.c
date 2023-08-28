@@ -26,6 +26,7 @@ long base_addr = 0;
 long sym_malloc;
 long sym_free;
 
+long hash_table[0x10000];
 
 struct user_regs_struct regs;
 struct user_regs_struct save_regs;
@@ -36,6 +37,7 @@ struct chunk_list
   struct chunk_list *next;
   struct chunk_list *hist;
 };
+
 
 static int get_plt(char *head,char *malloc_func_name,char *free_func_name)
 {
@@ -186,7 +188,7 @@ static int get_symbols(char *head,char *malloc_func_name,char *free_func_name)
   return;
 }
 
-struct chunk_list  *chunk_list_create(struct chunk_list* chunk_list,long *mmap_pointer,long chunk_addr)
+struct chunk_list  *chunk_list_create(struct chunk_list* chunk_list,long chunk_addr)
 {
   struct chunk_list* new_list = (struct chunk_list*)malloc(sizeof(struct chunk_list));
   struct chunk_list* new_hist = (struct chunk_list*)malloc(sizeof(struct chunk_list));
@@ -210,7 +212,7 @@ struct chunk_list  *chunk_list_create(struct chunk_list* chunk_list,long *mmap_p
     dummy_list->hist = new_hist;
     dummy_list->next = new_list;
     
-    mmap_pointer[hash_addr] = dummy_list;
+    hash_table[hash_addr] = dummy_list;
     
     return dummy_list;
   }else{    
@@ -222,14 +224,14 @@ struct chunk_list  *chunk_list_create(struct chunk_list* chunk_list,long *mmap_p
       if(hist_p->chunk_addr == chunk_addr){
         hist_p->next = NULL;
         p->next = new_list;
-        mmap_pointer[hash_addr] = chunk_list;
+        hash_table[hash_addr] = chunk_list;
         return chunk_list;
       }     
       hist_p = hist_p->next;      
     }
     hist_p->next = new_hist;
     p->next = new_list;    
-    mmap_pointer[hash_addr] = chunk_list;
+    hash_table[hash_addr] = chunk_list;
     return chunk_list;
   }
 }  
@@ -261,12 +263,12 @@ struct chunk_list  *chunk_list_delete(struct chunk_list** chunk_list,long chunk_
     hist_pointer = &(*hist_pointer)->hist;
     while (*hist_pointer != NULL){
       if ((*hist_pointer)->chunk_addr == chunk_addr){
-        return 2;
+        return 1;
       }
       hist_pointer = &(*hist_pointer)->next;
     }
   }
-  return 1;
+  return 2;
 }
 
 struct chunk_list  *chunk_list_print(struct chunk_list* chunk_list,long chunk_addr)
@@ -353,76 +355,9 @@ long call_got_plt(int pid,int status, long start_addr)
   ptrace_continue(pid,status);
   breakpoint_delete(pid,libc_data,init);
   
-  ptrace(PTRACE_GETREGS, pid, NULL, &regs); 
-  save_regs = regs; // save register
-  target = regs.rip; //rewrite addr
-
-  data = ptrace(PTRACE_PEEKDATA,pid,target,NULL);
-  
-  /* 
-  Flow: Get the address of malloc() and free() while rewriting the instructions placed in _init.(Get the address by avoiding demand loading)
-  1. set int3 breakpoint in _init
-  2. jump to malloc@got.plt by calling rax(Rewrite rax to malloc@got.plt address)
-  3. get malloc() address from relocation address
-  4. rewrite rip to the address rewritten in step 2 and call again (Rewrite rax to free@got.plt address)
-  5. get free() address from relocation address
-  6. Return the register to the state of step 1, and rewrite rip to the top address of _init
-  */
-
-  call_opcode = 0xd0ff; //call rax; 
-  regs.rax = mall_got_plt;// step1 call malloc@plt
-  regs.rdi = 30; 
-  ptrace(PTRACE_SETREGS, pid, 0, &regs);
-  if(ptrace(PTRACE_POKETEXT, pid,target, ((data & 0xFFFFFFFFFFFF0000) | call_opcode)) == -1){
-    printf("%s\n","Failed to set breakpoints");
-    exit(0);
-  }
-  printf("%lx\n", data & 0xFFFFFFFFFFFF0000);
-  
-  ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL);
-  waitpid(pid, &status, 0);
-  ptrace(PTRACE_GETREGS, pid, NULL, &regs); 
   malloc_func = ptrace(PTRACE_PEEKDATA,pid,mall_got_plt,NULL); //get malloc()
+  free_func = ptrace(PTRACE_PEEKDATA,pid,free_got_plt,NULL); //get malloc()
   
-  check = ptrace(PTRACE_PEEKDATA,pid,malloc_func,NULL);
-
-  breakpoint_delete(pid,data,target);
- 
-  ptrace(PTRACE_GETREGS, pid, NULL, &regs); 
-  target = regs.rip; //rewrite addr
-
-  regs.rax = free_got_plt; //step2 call free func
-  regs.rdi = 0; 
-  ptrace(PTRACE_SETREGS, pid, 0, &regs);
-  
-  data = ptrace(PTRACE_PEEKDATA,pid,target,NULL);
-  printf("%lx\n",data);
-  ptrace(PTRACE_POKETEXT, pid,target, call_opcode);
-
-  
-  ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL);
-  waitpid(pid, &status, 0);
-  
-  ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL);
-  waitpid(pid, &status, 0);
-  ptrace(PTRACE_GETREGS, pid, NULL, &regs); 
-  
-  free_func = ptrace(PTRACE_PEEKDATA,pid,free_got_plt,NULL);
-  printf("free_addr 0x%lx\n",free_func); 
-
-  breakpoint_delete(pid,data,target);
-  
-  regs.rip = init;
-  ptrace(PTRACE_SETREGS, pid, 0, &save_regs);
-  
-  
-  ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL);
-  waitpid(pid, &status, 0);
-  ptrace(PTRACE_GETREGS, pid, NULL, &regs); 
-
-  ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL);
-  waitpid(pid, &status, 0);
-
 }
 
 long get_options(int argc,char *argv[],int pid,int status)
@@ -482,7 +417,12 @@ struct chunk_list *list = NULL;
 
 int main(int argc, char *argv[],char **envp)
 {
-  long *mmap_pointer = mmap(0, 0x90000, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+  //long *mmap_pointer = mmap(0, 0x10000000, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+  //long *mmap_pointer = mmap(0, 0x10*0x3, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+  
+  //struct hash_table* hashtable = (struct hash_table*)malloc(sizeof(struct hash_table));
+  
+  
   
   int status , count,pid;
   char proc_maps[32];
@@ -545,15 +485,18 @@ int main(int argc, char *argv[],char **envp)
         long chunk_addr = regs.rax;
         
         long hash_addr = chunk_addr & n;
+
         
-        if(mmap_pointer[hash_addr] == 0){
+        if(hash_table[hash_addr] == 0){
           struct chunk_list *list = NULL;
-          chunk_list_create(list,mmap_pointer,chunk_addr);
+          chunk_list_create(list,chunk_addr);
+
         }else{
-          struct chunk_list *list = mmap_pointer[hash_addr];
-          
-          chunk_list_create(list,mmap_pointer,chunk_addr);
+          struct chunk_list *list = hash_table[hash_addr];        
+          chunk_list_create(list,chunk_addr);
+
         }
+
         regs.rip = return_addr;
         ptrace(PTRACE_SETREGS, pid, 0, &regs);
         ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL);
@@ -568,11 +511,10 @@ int main(int argc, char *argv[],char **envp)
        
         long chunk_addr = regs.rax;
         
-        list = mmap_pointer[hash_addr];
-        
-        if(regs.rax == 0 || mmap_pointer[hash_addr] == NULL ){
-          
-        }else if(chunk_list_delete(&list,chunk_addr) == 2){  
+        list = hash_table[hash_addr];
+
+        if(regs.rax == 0 || hash_table[hash_addr] == NULL ){
+        }else if(chunk_list_delete(&list,chunk_addr) == 1){  
           long stack_pointer = regs.rsp; //get return address
           long return_addr = ptrace(PTRACE_PEEKDATA,pid,stack_pointer,NULL);
           chunk_list_print(list,chunk_addr);
