@@ -691,6 +691,16 @@ int main(int argc, char *argv[], char *envp[])
             call_count = 0;
           }
         }
+        if (regs.orig_rax == 2){
+          if (call_count == 0 && regs.rdi != 0){ 
+            call_count = 1;
+            regs_path = regs.rdi;
+            get_path(pid,char_path,regs_path);
+            func_path_check(pid,char_path);
+          }else{
+            call_count = 0;
+          }
+        }
         if (regs.orig_rax == 59){
           if (call_count == 0 && regs.rdi != 0){ 
             call_count = 1;
