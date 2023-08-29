@@ -377,26 +377,6 @@ struct path_list  *path_list_create(struct path_list* path_list,char save_path[]
   }
 }
 
-
-struct sys_list  *list_create(struct sys_list* list,int save_rax,int option)
-{
-  struct sys_list* new_list = (struct sys_list*)malloc(sizeof(struct sys_list));
-  new_list->systemcall_number = save_rax;
-  new_list->option_number = option;
-  new_list->next = NULL;
-    
-  if (list == NULL) {
-    return new_list;
-  }else{
-    struct sys_list* p = list;
-    while (p->next != NULL) {
-      p = p->next;
-    }
-    p->next = new_list;
-    return list;
-  }
-}
-
 struct path_list  *check_path_list(struct path_list* path_list,char char_path[],int pid)
 {
   int secure_path = 0;
