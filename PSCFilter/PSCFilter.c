@@ -334,7 +334,10 @@ const char *systemcall[] = {
   "memfd_create",
   "kexec_file_load",
   "bpf",
-  "execveat"
+  "execveat",
+  "userfaultfd",
+  "membarrier",
+  "mlock2"
 };
 
 int config_type;
