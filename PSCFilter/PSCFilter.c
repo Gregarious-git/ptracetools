@@ -362,10 +362,10 @@ typedef struct path_list
   struct sys_filter *next;
 };
 
-struct path_list  *path_list_create(struct path_list* path_list,char save_path[])
+struct path_list  *path_list_create(struct path_list* path_list,char* path)
 {
   struct path_list* new_list = (struct path_list*)malloc(sizeof(struct path_list));
-  strcpy(new_list->path_name,save_path);
+  strcpy(new_list->path_name,path);
   new_list->next = NULL;
      
   if (path_list == NULL) {
@@ -380,23 +380,23 @@ struct path_list  *path_list_create(struct path_list* path_list,char save_path[]
   }
 }
 
-struct path_list  *check_path_list(struct path_list* path_list,char char_path[],int pid)
+struct path_list  *check_path_list(struct path_list* path_list,char* path,int pid) //a
 {
   int secure_path = 0;
   struct path_list *pointer = path_list;
-  if (strncmp(pointer->path_name,char_path,strlen(pointer->path_name)-1) == 0){
+  if (strncmp(pointer->path_name,path,strlen(pointer->path_name)-1) == 0){
     secure_path = 1;
       
   }else{
     while (pointer->next !=NULL){
       pointer = pointer->next;
-      if (strncmp(pointer->path_name,char_path,strlen(pointer->path_name)-1) == 0){
+      if (strncmp(pointer->path_name,path,strlen(pointer->path_name)-1) == 0){
         secure_path = 1;
         break;
       }
     }
     if (secure_path == 0){
-      printf("%s %s\n",char_path ,"is not secure");
+      printf("%s %s\n",path ,"is not secure");
       kill(pid, SIGINT);
       fclose(fp);
       exit(0);
@@ -404,10 +404,10 @@ struct path_list  *check_path_list(struct path_list* path_list,char char_path[],
   }
 }
 
-void check_list(int *syscall_number,long long int int_orig_rax,int pid,FILE** fp)
+void check_syscall(int *syscall_number,long int int_orig_rax,int pid,FILE** fp)
 {
   if (syscall_number[regs.orig_rax] == 1){
-    printf("%s %s\n",systemcall[int_orig_rax] ,"was called");
+    printf("%s %s\n",systemcall[int_orig_rax] ,"is not secure");
     printf("[*] %s\n" ,"process killed");
     kill(pid, SIGINT);
     fclose(fp);
@@ -415,12 +415,13 @@ void check_list(int *syscall_number,long long int int_orig_rax,int pid,FILE** fp
   }else if (syscall_number[regs.orig_rax] == 2){
     ptrace(PTRACE_GETREGS, pid, NULL, &regs);
     fprintf(fp,"%s 0x%lx 0x%lx 0x%lx 0x%lx\n",systemcall[int_orig_rax] ,regs.rip,regs.rax,regs.rdi,regs.rsi);
+    printf("[*] alert %s is not secure\n" ,systemcall[int_orig_rax]);
   }
 
 }
 
 
-void whitelist_check_list(int *syscall_number,long long int int_orig_rax,int pid,FILE** fp)
+void whitelist_check_syscall(int *syscall_number,long int int_orig_rax,int pid,FILE** fp)
 {
   if (syscall_number[regs.orig_rax] >= 1){
     return;
@@ -435,8 +436,7 @@ void whitelist_check_list(int *syscall_number,long long int int_orig_rax,int pid
 }
 
 
-
-void get_path(int pid,char char_path[],long long int regs_path)
+void get_path(int pid,char char_path[],long int regs_path)
 {
   const char* NULL_ascii = "00";
 
@@ -482,13 +482,12 @@ void get_path(int pid,char char_path[],long long int regs_path)
     temp = ptrace(PTRACE_PEEKDATA, pid, regs_path, NULL);
     swaptemp = bswap_64(temp);
     snprintf(temp_data, 17, "%lx", swaptemp);
-    strcat(ascii_data, temp_data);     
-    printf("%s\n",ascii_data);     
+    strcat(ascii_data, temp_data);        
   } 
   return char_path;
 }
 
-void syscall_filter(char *setread,int *syscall_number,char *option){
+void syscall_filter(char *syscall_name,int *syscall_number,char *option){
   char savedata[50];
   char *find;
   const char* option_kill = "kill";
@@ -498,7 +497,7 @@ void syscall_filter(char *setread,int *syscall_number,char *option){
   const char* sys_openat = "openat";
   const char* sys_execve = "execve";
   const char* sys_close = "close";
-  strncpy(savedata,setread,strlen(setread));
+  strncpy(savedata,syscall_name,strlen(syscall_name));
   if(strstr(savedata, sys_read) != NULL){
     syscall_number[0] = 1;
     if(strstr(option, option_kill) != NULL){
@@ -558,7 +557,6 @@ void readfile(int *syscall_number){
   json_t *path_array;
   json_t *path_object;
    
-  char setread[1024];
   int i;
   const char *syscall_name;
   const char *syscall_option;
@@ -609,7 +607,7 @@ void readfile(int *syscall_number){
   }
 }
 
-void func_path_check(int pid,char char_path[])
+void check_path_wrapper(int pid,char* char_path)
 {  
   char checkpath[1024];
   int secure_path = 0;
@@ -680,16 +678,16 @@ int main(int argc, char *argv[], char *envp[])
         int_orig_rax = regs.orig_rax;
         printf("%d %s %d %ld 0x%lx 0x%lx\n", si.si_pid,systemcall[regs.orig_rax],syscall_number[regs.orig_rax],regs.orig_rax, regs.rdi , regs.rsi);
         if (syscall_number[regs.orig_rax] >= 1 && config_type == 2){        
-          check_list(syscall_number,int_orig_rax,pid,fp);
+          check_syscall(syscall_number,int_orig_rax,pid,fp);
         }else if (config_type == 1){
-          whitelist_check_list(syscall_number,int_orig_rax,pid,fp);
+          whitelist_check_syscall(syscall_number,int_orig_rax,pid,fp);
         }
         if (regs.orig_rax == 257){
           if (call_count == 0){ 
             call_count = 1;
             regs_path = regs.rsi;
             get_path(pid,char_path,regs_path);
-            func_path_check(pid,char_path);
+            check_path_wrapper(pid,char_path);
           }else{
             call_count = 0;
           }
@@ -699,7 +697,7 @@ int main(int argc, char *argv[], char *envp[])
             call_count = 1;
             regs_path = regs.rdi;
             get_path(pid,char_path,regs_path);
-            func_path_check(pid,char_path);
+            check_path_wrapper(pid,char_path);
           }else{
             call_count = 0;
           }
@@ -709,7 +707,7 @@ int main(int argc, char *argv[], char *envp[])
             call_count = 1;
             regs_path = regs.rdi;
             get_path(pid,char_path,regs_path);
-            func_path_check(pid,char_path);
+            check_path_wrapper(pid,char_path);
           }else{
             call_count = 0;
           }
