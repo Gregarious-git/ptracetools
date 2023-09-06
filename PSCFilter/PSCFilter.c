@@ -388,7 +388,7 @@ struct path_list  *check_path_list(struct path_list* path_list,char* path,int pi
     }
     if (secure_path == 0){
       printf("%s %s\n",path ,"is not secure");
-      kill(pid, SIGINT);
+      kill(pid, SIGKILL);
       fclose(fp);
       exit(0);
     }
@@ -400,7 +400,7 @@ void check_syscall(int *syscall_number,long int int_orig_rax,int pid,FILE** fp)
   if (syscall_number[regs.orig_rax] == 1){
     printf("%s %s\n",systemcall[int_orig_rax] ,"is not secure");
     printf("[*] %s\n" ,"process killed");
-    kill(pid, SIGINT);
+    kill(pid, SIGKILL);
     fclose(fp);
     exit(0);
   }else if (syscall_number[regs.orig_rax] == 2){
@@ -419,7 +419,7 @@ void whitelist_check_syscall(int *syscall_number,long int int_orig_rax,int pid,F
   }else if (syscall_number[regs.orig_rax] == 0){
     printf("%s %s\n",systemcall[int_orig_rax] ,"is not secure");
     printf("[*] %s\n" ,"process killed");
-    kill(pid, SIGINT);
+    kill(pid, SIGKILL);
     fclose(fp);
     exit(0);
   }
