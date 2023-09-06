@@ -404,9 +404,9 @@ int main(int argc, char *argv[],char **envp)
         regs.rip = free_func;
         ptrace(PTRACE_SETREGS, pid, 0, &regs);
 
-        long hash_addr = regs.rax & n;
+        long hash_addr = regs.rdi & n;
        
-        long chunk_addr = regs.rax;
+        long chunk_addr = regs.rdi;
         
         list = hash_table[hash_addr];
 
