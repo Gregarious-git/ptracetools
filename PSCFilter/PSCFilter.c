@@ -345,16 +345,7 @@ int config_type;
 FILE * fp = NULL;
 
 struct user_regs_struct regs;
-
-struct sys_list *list = NULL;
 struct path_list *path_list = NULL;
-
-typedef struct sys_list
-{
-  int systemcall_number;
-  int option_number;
-  struct sys_filter *next;
-};
 
 typedef struct path_list
 {
