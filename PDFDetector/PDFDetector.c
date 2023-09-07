@@ -346,12 +346,12 @@ int main(int argc, char *argv[],char **envp)
 
   if((malloc_data = breakpoint_set(pid,malloc_func)) == 0xffffffffffffffff){
     printf("%lx\n",malloc_data);
-    kill(pid, SIGINT);
+    kill(pid, SIGKILL);
     exit(0);
   }
   if((free_data = breakpoint_set(pid,free_func)) == 0xffffffffffffffff){
     printf("%lx\n",free_data);
-    kill(pid, SIGINT);
+    kill(pid, SIGKILL);
     exit(0);
   }
   
@@ -434,11 +434,11 @@ int main(int argc, char *argv[],char **envp)
       
       ptrace(PTRACE_GETREGS, pid, NULL, &regs);
       if((malloc_data = breakpoint_set(pid,malloc_func)) == 0xffffffffffffffff){
-        kill(pid, SIGINT);
+        kill(pid, SIGKILL);
         exit(0);
       }
       if((free_data = breakpoint_set(pid,free_func)) == 0xffffffffffffffff){
-        kill(pid, SIGINT);
+        kill(pid, SIGKILL);
         exit(0);
       } 
       ptrace_continue(pid,status);
